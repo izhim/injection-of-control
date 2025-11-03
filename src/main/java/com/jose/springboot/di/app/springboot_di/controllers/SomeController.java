@@ -18,15 +18,16 @@ import org.springframework.web.bind.annotation.RequestMapping;
 @RequestMapping("/api")
 public class SomeController {
 
-    @Autowired
+    
+    @Autowired  // Inyección de dependencia vía atributo
     private ProductService service;
 
-    @GetMapping
+    @GetMapping 
     public List<Product> list(){
         return service.findAll();
     }
 
-    @GetMapping("/{id}")
+    @GetMapping("/{id}") 
     public Product show(@PathVariable Long id) {
         return service.findById(id);
     }

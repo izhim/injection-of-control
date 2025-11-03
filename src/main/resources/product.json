@@ -1,0 +1,22 @@
+[
+    {
+        "id": 1,
+        "name": "Abrigo de piel sintética",
+        "price": 300
+    },
+    {
+        "id": 2,
+        "name": "Gorra deportiva Nike",
+        "price": 100
+    },
+    {
+        "id": 3,
+        "name": "Smartphone Samsung Galaxy",
+        "price": 750
+    },
+    {
+        "id": 4,
+        "name": "Auriculares inalámbricos Sony",
+        "price": 120
+    }
+]
