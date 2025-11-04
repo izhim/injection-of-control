@@ -5,7 +5,6 @@ import java.util.Arrays;
 import java.util.List;
 
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.core.io.ClassPathResource;
 import org.springframework.core.io.Resource;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -22,6 +21,7 @@ public class ProductRepositoryJson implements ProductRepository {
         readValueJson(resource);
     }
 
+    // método para leer el archivo json y mapearlo a la lista de productos
     private void readValueJson(Resource resource) {
         ObjectMapper mapper = new ObjectMapper();   
         try {
