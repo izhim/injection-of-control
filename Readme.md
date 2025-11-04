@@ -1,33 +1,57 @@
-# Spring Boot Dependency Injection
+# Dependency Injection
 
-This section of my Spring Boot learning journey focuses on **Dependency Injection (DI)**. I’ll explain how it works, why it’s useful, and how I implemented it in this project using different approaches and annotations like `@Autowired`, `@Qualifier`, `@Primary`, and custom configuration classes.
-
----
-
-## 🧩 What is Dependency Injection?
-
-**Dependency Injection** is a design pattern that allows Spring to *automatically provide* the dependencies (objects) that a class needs, rather than the class creating them manually.
-This helps us **decouple** components, improve testability, and make our code more flexible and maintainable.
-
-In short: *you don’t create the dependencies; Spring gives them to you.*
+We’ll start with basic concepts, move through manual dependency management, and end with fully automated injection using `@Autowired`, `@Qualifier`, and custom configuration classes.
 
 ---
 
-## 🏗 Step 1 – Model Creation
+## 🧠 1. Understanding Dependency Injection
 
-First, I created a simple model called `Product` (not shown here for brevity) representing products with fields like `id`, `name`, and `price`.
-The model implements `Cloneable` so we can safely clone objects later in the service layer without breaking immutability principles.
+In object-oriented programming, classes often depend on other classes. For example, a `ProductService` may need a `ProductRepository` to retrieve data.
+Without DI, we’d manually create dependencies like this:
+
+```java
+ProductRepository repo = new ProductRepositoryImpl();
+ProductService service = new ProductServiceImpl(repo);
+```
+
+This approach **creates tight coupling** — the service directly controls which repository it uses.
+If we later want to change the data source (e.g., from a list to a JSON file or a database), we’d have to modify the service class.
+
+**Dependency Injection** solves this problem by allowing **Spring** to manage object creation and wiring.
+Classes simply declare what they need, and Spring provides it automatically.
 
 ---
 
-## 📦 Step 2 – Simulating a Database Repository (No DI Yet)
+## ⚙️ 2. How Spring Boot Manages Dependencies (IoC Container)
 
-Before introducing dependency injection, I manually created a repository that simulates database access:
+Spring uses an **Inversion of Control (IoC) Container**, which creates and manages objects called **beans**.
+Beans are registered through annotations like:
+
+* `@Component` – generic Spring bean
+* `@Service` – business logic layer
+* `@Repository` – persistence layer
+* `@Controller` / `@RestController` – web layer
+
+The container automatically detects and injects these beans wherever they are needed.
+
+---
+
+## 🧩 3. Setting Up the Model
+
+Our base entity is a `Product` class (with `id`, `name`, and `price`).
+It implements `Cloneable` so we can safely modify copies of products without altering the original data — a good practice for immutability.
+
+---
+
+## 🗄️ 4. Creating a Repository Without Dependency Injection
+
+Let’s first simulate a database repository manually:
 
 ```java
 @Repository("productList")
 @Primary
 public class ProductRepositoryImpl implements ProductRepository {
+
     private List<Product> data;
 
     public ProductRepositoryImpl() {
@@ -52,13 +76,14 @@ public class ProductRepositoryImpl implements ProductRepository {
 }
 ```
 
-At this stage, if we wanted to use this repository, we’d have to instantiate it manually inside another class — which tightly couples our code.
+This repository is functional, but currently it would need to be instantiated manually by any class that uses it — something we’ll soon let Spring handle automatically.
 
 ---
 
-## 🔗 Step 3 – Decoupling with Interfaces
+## 🧱 5. Decoupling with Interfaces
 
-To avoid tight coupling, I defined two interfaces:
+We define interfaces to **abstract** the implementation.
+This lets us replace one repository with another (e.g., JSON-based, database, or API) without modifying business logic.
 
 ```java
 public interface ProductRepository {
@@ -72,23 +97,22 @@ public interface ProductService {
 }
 ```
 
-By programming against **interfaces** instead of concrete implementations, we make our code flexible — we can easily switch to a different repository later (for example, one that reads from a JSON file or a real database) without changing the service or controller logic.
+By coding to interfaces, we **decouple** our layers and make testing easier.
 
 ---
 
-## ⚙️ Step 4 – Introducing Dependency Injection
+## 🔌 6. Implementing Dependency Injection in the Service Layer
 
-Here’s where the magic starts.
-Spring can automatically “inject” a repository into our service class:
+Now, we let Spring **inject** the repository into the service.
+Instead of manually instantiating it, we use constructor injection:
 
 ```java
 @Service
 public class ProductServiceImpl implements ProductService {
 
-    private ProductRepository repository;
-    private Environment environment;
+    private final ProductRepository repository;
+    private final Environment environment;
 
-    // Constructor Injection (recommended)
     public ProductServiceImpl(@Qualifier("productJson") ProductRepository repository,
                               Environment environment) {
         this.repository = repository;
@@ -100,7 +124,7 @@ public class ProductServiceImpl implements ProductService {
         return repository.findAll().stream()
             .map(p -> {
                 Product product = (Product) p.clone();
-                product.setPrice((long)(p.getPrice() *
+                product.setPrice((long) (p.getPrice() *
                         environment.getProperty("config.price.tax", Double.class)));
                 return product;
             })
@@ -114,7 +138,9 @@ public class ProductServiceImpl implements ProductService {
 }
 ```
 
-### 💡 Types of Dependency Injection in Spring
+Spring now automatically provides an instance of `ProductRepository` (specifically the `productJson` bean) and `Environment`.
+
+### 💡 Injection Methods in Spring
 
 1. **Field Injection**
 
@@ -122,27 +148,28 @@ public class ProductServiceImpl implements ProductService {
    @Autowired
    private ProductService service;
    ```
-
 2. **Setter Injection**
 
    ```java
    @Autowired
    public void setRepository(ProductRepository repository) { ... }
    ```
-
 3. **Constructor Injection (Recommended)**
-   The preferred approach since it makes dependencies immutable and easier to test.
+   Guarantees immutability and makes testing simpler.
 
 ---
 
-## 🧠 Step 5 – Understanding Bean Scopes
+## 🧬 7. Bean Scopes and Lifecycle
 
-By default, Spring beans follow the **Singleton pattern** — only one instance of each bean is created and shared across the application.
+By default, Spring beans follow the **Singleton pattern** — one shared instance per application context.
+However, Spring offers more granular control with scopes:
 
-However, Spring also supports other scopes:
-
-* `@RequestScope`: creates a new bean instance for each HTTP request.
-* `@SessionScope`: creates one bean instance per user session.
+| Scope       | Description                            |
+| ----------- | -------------------------------------- |
+| `singleton` | One shared instance (default)          |
+| `prototype` | A new instance each time it’s injected |
+| `request`   | One instance per HTTP request          |
+| `session`   | One instance per user session          |
 
 Example:
 
@@ -152,17 +179,19 @@ Example:
 public class RequestScopedService { ... }
 ```
 
-This can be useful for storing temporary user data or context-sensitive information.
+This is useful for request-specific data like user info or session state.
 
 ---
 
-## 🎯 Step 6 – Using @Primary and @Qualifier
+## 🎯 8. Managing Multiple Implementations with @Primary and @Qualifier
 
-When multiple beans implement the same interface, Spring won’t know which one to inject.
-To handle this, we can:
+If two beans implement the same interface, Spring won’t know which one to inject.
+We can solve this in two ways:
 
-* Mark one bean as the default with `@Primary`.
-* Or specify the exact bean with `@Qualifier`.
+* **@Primary**: Marks a default bean to be injected when multiple are available.
+* **@Qualifier**: Explicitly specifies which bean to inject.
+
+Example:
 
 ```java
 @Primary
@@ -178,13 +207,13 @@ public class ProductServiceImpl implements ProductService {
 }
 ```
 
-In this example, even though `ProductRepositoryImpl` is marked as `@Primary`, we override that by explicitly injecting `productJson`.
+Here, even though `productList` is marked `@Primary`, we explicitly inject the JSON-based repository using `@Qualifier("productJson")`.
 
 ---
 
-## 🗂 Step 7 – Reading Data from a JSON File with AppConfig
+## 📂 9. Custom Bean Configuration with @Configuration and @Bean
 
-I added a new repository that reads products from a JSON file stored in `resources/product.json`:
+To add more flexibility, I created a repository that reads data from a **JSON file** stored in `resources/product.json`.
 
 ```java
 public class ProductRepositoryJson implements ProductRepository {
@@ -216,7 +245,7 @@ public class ProductRepositoryJson implements ProductRepository {
 }
 ```
 
-And registered it in a configuration class:
+Then I registered it as a Spring bean using a **configuration class**:
 
 ```java
 @Configuration
@@ -233,13 +262,13 @@ public class AppConfig {
 }
 ```
 
-This demonstrates how we can use a **custom configuration class** with `@Bean` methods to define new beans manually, while still benefiting from dependency injection.
+This approach demonstrates **manual bean registration** while keeping full compatibility with DI.
 
 ---
 
-## 🌐 Step 8 – Controller and REST Endpoints
+## 🌍 10. The Controller Layer and Dependency Injection in Action
 
-Finally, the controller uses dependency injection to access the service layer:
+The controller layer uses DI to get the service automatically:
 
 ```java
 @RestController
@@ -261,19 +290,31 @@ public class SomeController {
 }
 ```
 
-Spring injects `ProductServiceImpl` automatically, which in turn depends on the correct repository.
+Spring creates and injects all required components behind the scenes:
+
+* `SomeController` → gets a `ProductServiceImpl`
+* `ProductServiceImpl` → gets a `ProductRepositoryJson` and `Environment`
 
 ---
 
-## ✅ Summary
+## 🧾 11. Summary and Key Takeaways
 
-In this section, I’ve learned how to:
+After completing this section, I’ve learned:
 
-* Create and inject dependencies automatically using Spring Boot.
-* Decouple components using interfaces.
-* Configure custom beans with `@Configuration` and `@Bean`.
-* Work with bean scopes (`@Singleton`, `@RequestScope`, `@SessionScope`).
-* Use `@Primary` and `@Qualifier` to control which implementation is injected.
-* Combine configuration files (`config.properties`) and resources (JSON) for dynamic data.
+* How **Dependency Injection** decouples components and simplifies maintenance.
+* How the **Spring IoC container** manages beans automatically.
+* The importance of **interfaces** in flexible architecture.
+* Different injection types: field, setter, and constructor.
+* The use of **scopes** (`singleton`, `request`, `session`) to control bean lifecycle.
+* How **@Primary** and **@Qualifier** resolve multiple bean conflicts.
+* How to use **@Configuration** and **@Bean** to define custom beans.
 
-This example illustrates how Spring Boot handles object management efficiently and promotes clean, modular architecture.
+---
+
+## 🚀 Final Thoughts
+
+Dependency Injection is the backbone of Spring Boot.
+It lets us focus on **business logic** while Spring handles object creation and lifecycle management.
+Once you master it, you can build modular, testable, and scalable applications with ease.
+
+> 💡 **Tip:** Always prefer constructor injection, rely on interfaces, and use qualifiers wisely. These small habits lead to cleaner, more maintainable code.
